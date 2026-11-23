@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
-from src.models.repo_models import RepoItem
+from src.models.repo_models import MAX_HISTORY_PER_REPO, RepoItem, RepoRunRecord
 
-DEFAULT_CONFIG_PATH = Path("repos.json")
+DEFAULT_CONFIG_PATH = (
+    Path(sys.executable).parent / "repos.json"
+    if getattr(sys, "frozen", False)
+    else Path("repos.json")
+)
 
 
 def _normalize_path(path: str) -> str:
@@ -88,6 +93,32 @@ class ConfigStore:
         repos[index], repos[target_index] = repos[target_index], repos[index]
         self.save_repos(repos)
         return repos
+
+    def append_run_record(self, repo_path: str, record: RepoRunRecord) -> list[RepoItem]:
+        """Prepend a run record to a repository's history (max 5) and save."""
+        repos = self.load_repos()
+        target_norm = _normalize_path(repo_path)
+        for repo in repos:
+            if _normalize_path(repo.path) == target_norm:
+                repo.history = [record, *repo.history][:MAX_HISTORY_PER_REPO]
+                break
+        self.save_repos(repos)
+        return repos
+
+    def promote_repos_to_top(self, repo_paths: list[str]) -> list[RepoItem]:
+        """Move executed repositories to the top, sorted alphabetically by name."""
+        if not repo_paths:
+            return self.load_repos()
+
+        repos = self.load_repos()
+        target_norms = {_normalize_path(p) for p in repo_paths}
+        promoted = [r for r in repos if _normalize_path(r.path) in target_norms]
+        rest = [r for r in repos if _normalize_path(r.path) not in target_norms]
+        promoted.sort(key=lambda r: r.name.casefold())
+
+        reordered = promoted + rest
+        self.save_repos(reordered)
+        return reordered
 
     @staticmethod
     def _reindex(repos: list[RepoItem]) -> None:

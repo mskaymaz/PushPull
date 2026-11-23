@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QThreadPool
@@ -15,7 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.models.repo_models import RepoItem, RepoRunResult, RepoStatus
+from src.models.repo_models import RepoItem, RepoRunRecord, RepoRunResult, RepoStatus
 from src.services.config_store import ConfigStore, DEFAULT_CONFIG_PATH
 from src.services.repo_worker import PipelineOptions, RepoWorker
 from src.ui.repo_list import RepoListWidget
@@ -37,6 +38,9 @@ class MainWindow(QMainWindow):
         self._repos: list[RepoItem] = []
         self._active_workers = 0
         self._running_workers: dict[str, RepoWorker] = {}
+        self._run_steps: dict[str, list[str]] = {}
+        self._run_logs: dict[str, list[str]] = {}
+        self._batch_promote_paths: list[str] = []
         self._thread_pool = QThreadPool.globalInstance()
         self._thread_pool.setMaxThreadCount(4)
 
@@ -115,7 +119,7 @@ class MainWindow(QMainWindow):
         if not rows or self._active_workers > 0:
             return
         jobs = [(row, PipelineOptions(fetch=True, analyze=True)) for row in rows]
-        self._dispatch_jobs(jobs)
+        self._dispatch_jobs(jobs, promote_on_finish=False)
 
     def run_selected(self) -> None:
         """Run checked pipeline steps for each repository row."""
@@ -134,15 +138,22 @@ class MainWindow(QMainWindow):
                 "Çalıştırmak için en az bir repoda bir işlem kutucuğu işaretleyin.",
             )
             return
-        self._dispatch_jobs(jobs)
+        self._dispatch_jobs(jobs, promote_on_finish=True)
 
-    def _dispatch_jobs(self, jobs: list[tuple[RepoRowWidget, PipelineOptions]]) -> None:
+    def _dispatch_jobs(
+        self,
+        jobs: list[tuple[RepoRowWidget, PipelineOptions]],
+        promote_on_finish: bool,
+    ) -> None:
         self._active_workers = len(jobs)
+        self._batch_promote_paths = [row.repo_path for row, _ in jobs] if promote_on_finish else []
         self.toolbar.set_busy(True)
 
         for row, options in jobs:
             row.clear_logs()
             row.set_status(RepoStatus.RUNNING, "Sırada...")
+            self._run_steps[row.repo_path] = [s.capitalize() for s in options.selected_steps()]
+            self._run_logs[row.repo_path] = []
             worker = RepoWorker(row.repo_path, options)
             worker.setAutoDelete(False)
             self._running_workers[row.repo_path] = worker
@@ -158,12 +169,14 @@ class MainWindow(QMainWindow):
             row.set_status(RepoStatus.RUNNING, "Çalışıyor...")
 
     def _on_worker_step_done(self, repo_path: str, result: RepoRunResult) -> None:
+        self._run_logs.setdefault(repo_path, []).extend(result.logs)
         row = self.repo_list.get_row(repo_path)
         if row is not None:
             row.append_logs(result.logs)
             row.set_status(result.status, result.message)
 
     def _on_worker_finished(self, repo_path: str, result: RepoRunResult) -> None:
+        self._record_run_history(repo_path, result)
         row = self.repo_list.get_row(repo_path)
         if row is not None:
             row.set_status(result.status, result.message)
@@ -171,6 +184,8 @@ class MainWindow(QMainWindow):
         self._mark_worker_done(repo_path)
 
     def _on_worker_error(self, repo_path: str, result: RepoRunResult) -> None:
+        self._run_logs.setdefault(repo_path, []).extend(result.logs)
+        self._record_run_history(repo_path, result)
         row = self.repo_list.get_row(repo_path)
         if row is not None:
             row.append_logs(result.logs)
@@ -178,11 +193,57 @@ class MainWindow(QMainWindow):
             row.set_expanded(True)
         self._mark_worker_done(repo_path)
 
+    def _record_run_history(self, repo_path: str, result: RepoRunResult) -> None:
+        record = RepoRunRecord(
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            steps=self._run_steps.pop(repo_path, [result.step.capitalize()]),
+            status=result.status,
+            summary=result.message,
+            logs=self._run_logs.pop(repo_path, list(result.logs)),
+        )
+        self._repos = self.store.append_run_record(repo_path, record)
+        row = self.repo_list.get_row(repo_path)
+        updated = next((r for r in self._repos if r.path == repo_path), None)
+        if row is not None and updated is not None:
+            row.set_history(updated.history)
+
     def _mark_worker_done(self, repo_path: str) -> None:
         self._running_workers.pop(repo_path, None)
         self._active_workers = max(0, self._active_workers - 1)
         if self._active_workers == 0:
             self.toolbar.set_busy(False)
+            if self._batch_promote_paths:
+                self._promote_after_batch()
+
+    def _promote_after_batch(self) -> None:
+        """Move recently executed repos to the top while preserving UI row states."""
+        snapshots = {
+            row.repo_path: (
+                row.status_btn.property("status"),
+                row.status_btn.text(),
+                row.is_expanded(),
+                row.get_options(),
+            )
+            for row in self.repo_list.iter_rows()
+        }
+        self._repos = self.store.promote_repos_to_top(self._batch_promote_paths)
+        self._batch_promote_paths = []
+        self.repo_list.set_repos(self._repos)
+        for row in self.repo_list.iter_rows():
+            snap = snapshots.get(row.repo_path)
+            if snap is None:
+                continue
+            status_val, status_text, expanded, opts = snap
+            try:
+                status_enum = RepoStatus(status_val)
+            except ValueError:
+                status_enum = RepoStatus.IDLE
+            row.set_status(status_enum, status_text)
+            row.set_expanded(expanded)
+            for step in opts.selected_steps():
+                row.set_step_checked(step, True)
+            if opts.commit_message:
+                row.set_commit_message(opts.commit_message)
 
 
 def create_application(

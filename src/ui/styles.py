@@ -1,32 +1,32 @@
-"""Centralized design tokens and Qt stylesheet for PushPull."""
+"""Centralized design tokens and Qt stylesheet for PushPull (light, airy theme)."""
 
 from __future__ import annotations
 
 APP_STYLESHEET = """
 QMainWindow, QWidget#MainRoot {
-    background-color: #0B1017;
-    color: #E6EDF3;
+    background-color: #F3F6FB;
+    color: #1E293B;
     font-family: "Segoe UI", "Inter", sans-serif;
     font-size: 13px;
 }
 
 QFrame#TopToolbar {
-    background-color: #121923;
-    border: 1px solid #233044;
+    background-color: #FFFFFF;
+    border: 1px solid #DCE3EE;
     border-radius: 12px;
 }
 
 QLabel#AppTitle {
-    color: #F0F6FC;
+    color: #0F172A;
     font-size: 16px;
     font-weight: 700;
     letter-spacing: 0.2px;
 }
 
 QLabel#RepoCountBadge {
-    background-color: #1B2534;
-    color: #8B98AB;
-    border: 1px solid #263449;
+    background-color: #EFF4FC;
+    color: #475569;
+    border: 1px solid #D8E2F0;
     border-radius: 10px;
     padding: 3px 10px;
     font-size: 11px;
@@ -34,9 +34,9 @@ QLabel#RepoCountBadge {
 }
 
 QPushButton {
-    background-color: #1A2332;
-    color: #E6EDF3;
-    border: 1px solid #2B394F;
+    background-color: #F8FAFC;
+    color: #1E293B;
+    border: 1px solid #CBD5E1;
     border-radius: 8px;
     padding: 7px 14px;
     font-weight: 600;
@@ -44,50 +44,50 @@ QPushButton {
 }
 
 QPushButton:hover {
-    background-color: #222E42;
-    border-color: #3A4D6B;
+    background-color: #EFF4FB;
+    border-color: #94A3B8;
 }
 
 QPushButton:pressed {
-    background-color: #151D29;
+    background-color: #E2E8F0;
 }
 
 QPushButton:disabled {
-    background-color: #131A24;
-    color: #556275;
-    border-color: #1E2837;
+    background-color: #F1F5F9;
+    color: #94A3B8;
+    border-color: #E2E8F0;
 }
 
 QPushButton#PrimaryButton {
-    background-color: #2F81F7;
+    background-color: #2563EB;
     color: #FFFFFF;
-    border: 1px solid #388BFD;
+    border: 1px solid #2563EB;
 }
 
 QPushButton#PrimaryButton:hover {
-    background-color: #388BFD;
-    border-color: #58A6FF;
+    background-color: #1D4ED8;
+    border-color: #1D4ED8;
 }
 
 QPushButton#PrimaryButton:pressed {
-    background-color: #1F6FEB;
+    background-color: #1E40AF;
 }
 
 QPushButton#PrimaryButton:disabled {
-    background-color: #1A2E4C;
-    color: #6B88B4;
-    border-color: #213B61;
+    background-color: #BFDBFE;
+    color: #EFF6FF;
+    border-color: #BFDBFE;
 }
 
 /* Table Header & Scrollable Container */
 QFrame#TableHeader {
-    background-color: #101620;
-    border: 1px solid #1E293B;
+    background-color: #EBF0F7;
+    border: 1px solid #DCE3EE;
     border-radius: 10px;
 }
 
 QLabel#HeaderLabel {
-    color: #7D8B9F;
+    color: #475569;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.6px;
@@ -95,7 +95,7 @@ QLabel#HeaderLabel {
 
 QPushButton#HeaderStepButton {
     background-color: transparent;
-    color: #7D8B9F;
+    color: #475569;
     border: 1px solid transparent;
     border-radius: 6px;
     padding: 3px 2px;
@@ -105,13 +105,13 @@ QPushButton#HeaderStepButton {
 }
 
 QPushButton#HeaderStepButton:hover {
-    background-color: #1A2332;
-    color: #E6EDF3;
-    border-color: #2B394F;
+    background-color: #DCE5F2;
+    color: #0F172A;
+    border-color: #CBD5E1;
 }
 
 QPushButton#HeaderStepButton:pressed {
-    background-color: #151D29;
+    background-color: #CBD5E1;
 }
 
 QScrollArea#RepoScrollArea {
@@ -124,41 +124,41 @@ QWidget#RepoScrollContent {
 }
 
 QLabel#EmptyStateLabel {
-    color: #6E7F96;
+    color: #64748B;
     font-size: 13.5px;
     padding: 36px;
-    background-color: #101620;
-    border: 1px dashed #233044;
+    background-color: #FFFFFF;
+    border: 1px dashed #CBD5E1;
     border-radius: 12px;
 }
 
 /* Repo Row Card */
 QFrame#RepoRowCard {
-    background-color: #121923;
-    border: 1px solid #1F2A3C;
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
     border-radius: 10px;
 }
 
 QFrame#RepoRowCard:hover {
-    border-color: #2F405B;
-    background-color: #151D29;
+    border-color: #93C5FD;
+    background-color: #FAFCFF;
 }
 
 QLabel#RepoNameLabel {
-    color: #F0F6FC;
+    color: #0F172A;
     font-size: 13.5px;
     font-weight: 600;
 }
 
 QLabel#RepoPathLabel {
-    color: #6E7F96;
+    color: #64748B;
     font-size: 11px;
 }
 
 /* Row Micro Action Buttons */
 QPushButton#RowIconButton {
     background-color: transparent;
-    color: #7D8B9F;
+    color: #64748B;
     border: 1px solid transparent;
     border-radius: 6px;
     padding: 0px;
@@ -167,20 +167,20 @@ QPushButton#RowIconButton {
 }
 
 QPushButton#RowIconButton:hover {
-    background-color: #1E293B;
-    color: #E6EDF3;
-    border-color: #2E3D54;
+    background-color: #E2E8F0;
+    color: #0F172A;
+    border-color: #CBD5E1;
 }
 
 QPushButton#RowIconButton:disabled {
-    color: #334155;
+    color: #CBD5E1;
     background-color: transparent;
     border-color: transparent;
 }
 
 QPushButton#RowDeleteButton {
     background-color: transparent;
-    color: #6E7F96;
+    color: #94A3B8;
     border: 1px solid transparent;
     border-radius: 6px;
     padding: 0px;
@@ -189,9 +189,9 @@ QPushButton#RowDeleteButton {
 }
 
 QPushButton#RowDeleteButton:hover {
-    background-color: #2D161C;
-    color: #F85149;
-    border-color: #5C232C;
+    background-color: #FEE2E2;
+    color: #DC2626;
+    border-color: #FCA5A5;
 }
 
 /* Custom Checkbox */
@@ -203,22 +203,22 @@ QCheckBox::indicator {
     width: 17px;
     height: 17px;
     border-radius: 5px;
-    border: 1.5px solid #334155;
-    background-color: #0E141D;
+    border: 1.5px solid #94A3B8;
+    background-color: #FFFFFF;
 }
 
 QCheckBox::indicator:hover {
-    border-color: #58A6FF;
+    border-color: #2563EB;
 }
 
 QCheckBox::indicator:checked {
-    background-color: #2F81F7;
-    border-color: #388BFD;
+    background-color: #2563EB;
+    border-color: #2563EB;
 }
 
 QCheckBox::indicator:disabled {
-    background-color: #121821;
-    border-color: #1E293B;
+    background-color: #F1F5F9;
+    border-color: #CBD5E1;
 }
 
 /* Status Pill Badge */
@@ -231,76 +231,108 @@ QPushButton#StatusBadge {
 }
 
 QPushButton#StatusBadge[status="idle"] {
-    background-color: #1A2332;
-    color: #8B98AB;
-    border: 1px solid #2A374C;
+    background-color: #F1F5F9;
+    color: #475569;
+    border: 1px solid #CBD5E1;
 }
 
 QPushButton#StatusBadge[status="running"] {
-    background-color: #132847;
-    color: #79C0FF;
-    border: 1px solid #2F81F7;
+    background-color: #DBEAFE;
+    color: #1D4ED8;
+    border: 1px solid #93C5FD;
 }
 
 QPushButton#StatusBadge[status="success"] {
-    background-color: #122B1E;
-    color: #56D364;
-    border: 1px solid #238636;
+    background-color: #DCFCE7;
+    color: #15803D;
+    border: 1px solid #86EFAC;
 }
 
 QPushButton#StatusBadge[status="warning"] {
-    background-color: #2C2210;
-    color: #E3B341;
-    border: 1px solid #9E6A03;
+    background-color: #FEF3C7;
+    color: #B45309;
+    border: 1px solid #FCD34D;
 }
 
 QPushButton#StatusBadge[status="error"] {
-    background-color: #301519;
-    color: #FF7B72;
-    border: 1px solid #DA3633;
+    background-color: #FEE2E2;
+    color: #B91C1C;
+    border: 1px solid #FCA5A5;
 }
 
 /* Commit Inline Bar */
 QFrame#CommitBar {
-    background-color: #0E1520;
-    border-top: 1px solid #1E293B;
+    background-color: #F8FAFC;
+    border-top: 1px solid #E2E8F0;
 }
 
 QLabel#CommitHintLabel {
-    color: #8B98AB;
+    color: #475569;
     font-size: 11.5px;
     font-weight: 600;
 }
 
 QLineEdit#CommitInput {
-    background-color: #151E2B;
-    color: #E6EDF3;
-    border: 1px solid #2A384D;
+    background-color: #FFFFFF;
+    color: #0F172A;
+    border: 1px solid #CBD5E1;
     border-radius: 7px;
     padding: 5px 10px;
     font-size: 12px;
 }
 
 QLineEdit#CommitInput:focus {
-    border-color: #2F81F7;
-    background-color: #172231;
+    border-color: #2563EB;
+    background-color: #FFFFFF;
 }
 
 /* Accordion Log Drawer */
 QFrame#AccordionDrawer {
-    background-color: #0A0E14;
-    border-top: 1px solid #1E293B;
+    background-color: #F8FAFC;
+    border-top: 1px solid #E2E8F0;
     border-bottom-left-radius: 9px;
     border-bottom-right-radius: 9px;
 }
 
+QLabel#HistorySectionLabel {
+    color: #64748B;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+}
+
+QListWidget#HistoryList {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 7px;
+    padding: 3px;
+    color: #334155;
+    font-size: 12px;
+    outline: none;
+}
+
+QListWidget#HistoryList::item {
+    padding: 5px 8px;
+    border-radius: 5px;
+}
+
+QListWidget#HistoryList::item:hover {
+    background-color: #EFF4FB;
+}
+
+QListWidget#HistoryList::item:selected {
+    background-color: #DBEAFE;
+    color: #1E3A8A;
+    font-weight: 600;
+}
+
 QPlainTextEdit#LogOutput {
     background-color: transparent;
-    color: #B6C2D2;
+    color: #334155;
     border: none;
     font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
     font-size: 11.5px;
-    selection-background-color: #1F6FEB;
+    selection-background-color: #BFDBFE;
 }
 
 /* Scrollbar */
@@ -311,13 +343,13 @@ QScrollBar:vertical {
 }
 
 QScrollBar::handle:vertical {
-    background: #273449;
+    background: #CBD5E1;
     border-radius: 4px;
     min-height: 28px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background: #3A4C69;
+    background: #94A3B8;
 }
 
 QScrollBar::add-line:vertical,

@@ -9,13 +9,15 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
-from src.models.repo_models import RepoItem, RepoStatus
+from src.models.repo_models import RepoItem, RepoRunRecord, RepoStatus
 from src.services.repo_worker import PipelineOptions
 
 STEP_KEYS = ("fetch", "analyze", "stash", "pull", "commit", "push")
@@ -48,6 +50,7 @@ class RepoRowWidget(QFrame):
         self._expanded = False
         self._commit_message = ""
         self._checkboxes: dict[str, QCheckBox] = {}
+        self._history: list[RepoRunRecord] = []
 
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
@@ -106,6 +109,10 @@ class RepoRowWidget(QFrame):
             cb.setCursor(Qt.CursorShape.PointingHandCursor)
             if step == "commit":
                 cb.toggled.connect(self._on_commit_checkbox_toggled)
+            elif step in ("pull", "push"):
+                cb.toggled.connect(
+                    lambda checked, s=step: self._on_dependent_step_toggled(s, checked)
+                )
             self._checkboxes[step] = cb
             cell_layout.addWidget(cb)
             row_layout.addWidget(cell)
@@ -161,16 +168,28 @@ class RepoRowWidget(QFrame):
         drawer_layout.setContentsMargins(14, 10, 14, 10)
         drawer_layout.setSpacing(6)
 
+        history_label = QLabel("SON 5 İŞLEM", self.drawer)
+        history_label.setObjectName("HistorySectionLabel")
+        drawer_layout.addWidget(history_label)
+
+        self.history_list = QListWidget(self.drawer)
+        self.history_list.setObjectName("HistoryList")
+        self.history_list.setFixedHeight(112)
+        self.history_list.currentRowChanged.connect(self._on_history_selected)
+        drawer_layout.addWidget(self.history_list)
+
         self.log_output = QPlainTextEdit(self.drawer)
         self.log_output.setObjectName("LogOutput")
         self.log_output.setReadOnly(True)
-        self.log_output.setFixedHeight(135)
+        self.log_output.setFixedHeight(125)
         self.log_output.setPlaceholderText("Bu repo için henüz işlem çıktısı yok.")
-        if repo.logs:
-            self.log_output.setPlainText("\n".join(repo.logs))
 
         drawer_layout.addWidget(self.log_output)
         root_layout.addWidget(self.drawer)
+
+        self.set_history(repo.history)
+        if repo.logs and not repo.history:
+            self.log_output.setPlainText("\n".join(repo.logs))
 
     def set_move_bounds(self, is_first: bool, is_last: bool) -> None:
         """Enable or disable up/down buttons based on row position."""
@@ -207,14 +226,58 @@ class RepoRowWidget(QFrame):
         self.log_output.appendPlainText("\n".join(lines))
 
     def clear_logs(self) -> None:
-        """Clear the accordion output view."""
+        """Clear the accordion output view for a new live run."""
+        self.history_list.clearSelection()
         self.log_output.clear()
+
+    def set_history(self, history: list[RepoRunRecord]) -> None:
+        """Populate the last-5 run history list and display the newest entry."""
+        self._history = list(history)
+        self.history_list.blockSignals(True)
+        self.history_list.clear()
+
+        if not self._history:
+            placeholder = QListWidgetItem("Henüz kayıtlı işlem yok.")
+            placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.history_list.addItem(placeholder)
+            self.history_list.blockSignals(False)
+            return
+
+        status_icons = {
+            RepoStatus.SUCCESS: "● Tamam",
+            RepoStatus.WARNING: "▲ Uyarı",
+            RepoStatus.ERROR: "✕ Hata",
+            RepoStatus.IDLE: "• Hazır",
+            RepoStatus.RUNNING: "… Çalışıyor",
+        }
+        for rec in self._history:
+            steps_txt = ", ".join(rec.steps) if rec.steps else "-"
+            badge = status_icons.get(rec.status, rec.status.value)
+            label = f"{rec.timestamp}  |  {steps_txt}  |  {badge}  —  {rec.summary}"
+            self.history_list.addItem(QListWidgetItem(label))
+
+        self.history_list.blockSignals(False)
+        self.history_list.setCurrentRow(0)
+        self._on_history_selected(0)
+
+    def _on_history_selected(self, index: int) -> None:
+        if 0 <= index < len(self._history):
+            self.log_output.setPlainText("\n".join(self._history[index].logs))
 
     def _on_commit_checkbox_toggled(self, checked: bool) -> None:
         self.commit_bar.setVisible(checked)
         if checked:
             self.commit_input.setFocus()
         self.commit_toggled.emit(self.repo_path, checked)
+
+    def _on_dependent_step_toggled(self, step: str, checked: bool) -> None:
+        """Auto-check prerequisite steps when Pull or Push is selected."""
+        if not checked:
+            return
+        prerequisites = ("fetch", "analyze") if step == "pull" else ("fetch", "analyze", "commit")
+        for req in prerequisites:
+            if not self.is_step_checked(req):
+                self.set_step_checked(req, True)
 
     def set_commit_message(self, message: str) -> None:
         """Store the commit message associated with this row."""
