@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 APP_STYLESHEET = """
-QMainWindow, QWidget#MainRoot {
+QMainWindow, QWidget#MainRoot, QDialog {
     background-color: #F3F6FB;
     color: #1E293B;
     font-family: "Segoe UI", "Inter", sans-serif;
     font-size: 13px;
+}
+
+QDialog QLineEdit {
+    background-color: #FFFFFF;
+    color: #0F172A;
+    border: 1px solid #CBD5E1;
+    border-radius: 7px;
+    padding: 6px 10px;
+}
+
+QDialog QLineEdit:focus {
+    border-color: #2563EB;
 }
 
 QFrame#TopToolbar {
@@ -192,6 +204,45 @@ QPushButton#RowDeleteButton:hover {
     background-color: #FEE2E2;
     color: #DC2626;
     border-color: #FCA5A5;
+}
+
+/* Release Target Pill Button */
+QPushButton#ReleaseButton {
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 11.5px;
+    font-weight: 700;
+}
+
+QPushButton#ReleaseButton[rel_target="none"] {
+    background-color: #F1F5F9;
+    color: #64748B;
+    border: 1px solid #CBD5E1;
+}
+
+QPushButton#ReleaseButton[rel_target="none"]:hover {
+    background-color: #E2E8F0;
+    color: #334155;
+}
+
+QPushButton#ReleaseButton[rel_target="self"] {
+    background-color: #FEE2E2;
+    color: #B91C1C;
+    border: 1px solid #FCA5A5;
+}
+
+QPushButton#ReleaseButton[rel_target="self"]:hover {
+    background-color: #FECACA;
+}
+
+QPushButton#ReleaseButton[rel_target="msklabsapps"] {
+    background-color: #DCFCE7;
+    color: #15803D;
+    border: 1px solid #86EFAC;
+}
+
+QPushButton#ReleaseButton[rel_target="msklabsapps"]:hover {
+    background-color: #BBF7D0;
 }
 
 /* Custom Checkbox */

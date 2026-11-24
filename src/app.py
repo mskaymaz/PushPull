@@ -6,7 +6,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QThreadPool
+from PySide6.QtCore import QThread, QThreadPool, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -18,29 +18,63 @@ from PySide6.QtWidgets import (
 
 from src.models.repo_models import RepoItem, RepoRunRecord, RepoRunResult, RepoStatus
 from src.services.config_store import ConfigStore, DEFAULT_CONFIG_PATH
+from src.services.gist_sync import pull_sync_payload, push_sync_payload
 from src.services.repo_worker import PipelineOptions, RepoWorker
+from src.ui.release_dialog import ReleaseDialog
 from src.ui.repo_list import RepoListWidget
 from src.ui.repo_row import RepoRowWidget
 from src.ui.styles import APP_STYLESHEET
 from src.ui.toolbar import TopToolbar
 
 
+class _GistPullThread(QThread):
+    completed = Signal(object, object)
+
+    def __init__(self, gist_id: str | None) -> None:
+        super().__init__()
+        self.gist_id = gist_id
+
+    def run(self) -> None:
+        gid, payload = pull_sync_payload(self.gist_id)
+        self.completed.emit(gid, payload)
+
+
+class _GistPushThread(QThread):
+    completed = Signal(bool, object)
+
+    def __init__(self, payload: dict, gist_id: str | None) -> None:
+        super().__init__()
+        self.payload = payload
+        self.gist_id = gist_id
+
+    def run(self) -> None:
+        ok, gid = push_sync_payload(self.payload, self.gist_id)
+        self.completed.emit(ok, gid)
+
+
 class MainWindow(QMainWindow):
     """Main application window for PushPull."""
 
-    def __init__(self, config_path: Path | str = DEFAULT_CONFIG_PATH) -> None:
+    def __init__(
+        self,
+        config_path: Path | str = DEFAULT_CONFIG_PATH,
+        sync_with_gist: bool = True,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("PushPull")
         self.resize(1120, 720)
         self.setMinimumSize(940, 560)
 
         self.store = ConfigStore(config_path)
+        self._sync_with_gist = sync_with_gist
         self._repos: list[RepoItem] = []
         self._active_workers = 0
         self._running_workers: dict[str, RepoWorker] = {}
         self._run_steps: dict[str, list[str]] = {}
         self._run_logs: dict[str, list[str]] = {}
         self._batch_promote_paths: list[str] = []
+        self._gist_pull_thread: _GistPullThread | None = None
+        self._gist_push_thread: _GistPushThread | None = None
         self._thread_pool = QThreadPool.globalInstance()
         self._thread_pool.setMaxThreadCount(4)
 
@@ -60,14 +94,19 @@ class MainWindow(QMainWindow):
 
         self._connect_signals()
         self.reload_repos()
+        if self._sync_with_gist:
+            self._start_gist_pull()
 
     def _connect_signals(self) -> None:
         self.toolbar.add_repo_clicked.connect(self.add_repo_dialog)
+        self.toolbar.map_folder_clicked.connect(self.scan_map_folder_dialog)
         self.toolbar.fetch_all_clicked.connect(self.run_fetch_all)
         self.toolbar.run_selected_clicked.connect(self.run_selected)
         self.repo_list.move_up_requested.connect(lambda p: self.move_repo_by_path(p, -1))
         self.repo_list.move_down_requested.connect(lambda p: self.move_repo_by_path(p, 1))
         self.repo_list.remove_requested.connect(self.remove_repo_by_path)
+        self.repo_list.release_requested.connect(self.open_release_dialog)
+        self.repo_list.remap_requested.connect(self.remap_repo_dialog)
 
     def reload_repos(self) -> None:
         """Load repositories from repos.json and refresh the UI."""
@@ -96,6 +135,7 @@ class MainWindow(QMainWindow):
         self._repos = self.store.add_repo(str(target))
         self.repo_list.set_repos(self._repos)
         self.toolbar.set_repo_count(len(self._repos))
+        self._schedule_gist_push()
         return True
 
     def move_repo_by_path(self, repo_path: str, direction: int) -> None:
@@ -106,12 +146,108 @@ class MainWindow(QMainWindow):
         self._repos = self.store.move_repo(idx, direction)
         self.repo_list.set_repos(self._repos)
         self.toolbar.set_repo_count(len(self._repos))
+        self._schedule_gist_push()
 
     def remove_repo_by_path(self, repo_path: str) -> None:
         """Remove a repository row and persist updated list."""
         self._repos = self.store.remove_repo(repo_path)
         self.repo_list.set_repos(self._repos)
         self.toolbar.set_repo_count(len(self._repos))
+        self._schedule_gist_push()
+
+    def remap_repo_dialog(self, old_path: str) -> None:
+        """Prompt user to pick the local folder on this PC for a missing repo."""
+        folder = QFileDialog.getExistingDirectory(self, "Bu Bilgisayardaki Repo Klasörünü Seç")
+        if not folder:
+            return
+        if not (Path(folder) / ".git").exists():
+            QMessageBox.warning(
+                self,
+                "Geçersiz Repo",
+                f"Seçilen klasörde '.git' dizini bulunamadı:\n{folder}",
+            )
+            return
+        self._repos = self.store.remap_repo_path(old_path, folder)
+        self.repo_list.set_repos(self._repos)
+        self.toolbar.set_repo_count(len(self._repos))
+        self._schedule_gist_push()
+
+    def scan_map_folder_dialog(self) -> None:
+        """Scan a parent folder and auto-map local paths for this computer."""
+        folder = QFileDialog.getExistingDirectory(self, "Ana Kod Klasörünü Seç")
+        if not folder:
+            return
+        matched, self._repos = self.store.scan_and_map_folder(folder)
+        self.repo_list.set_repos(self._repos)
+        self.toolbar.set_repo_count(len(self._repos))
+        if matched > 0:
+            self._schedule_gist_push()
+        QMessageBox.information(
+            self,
+            "Klasör Tarama Tamamlandı",
+            f"{matched} repo bu bilgisayardaki klasörüyle eşleştirildi.",
+        )
+
+    def open_release_dialog(self, repo_path: str) -> None:
+        """Open Release upload dialog and persist chosen target ('self' or 'msklabsapps')."""
+        repo = next((r for r in self._repos if r.path == repo_path), None)
+        if repo is None:
+            return
+        dialog = ReleaseDialog(
+            repo_name=repo.name,
+            repo_path=repo.path,
+            saved_target=repo.release_target,
+            parent=self,
+        )
+        if dialog.exec() == ReleaseDialog.DialogCode.Accepted:
+            self._repos = self.store.set_release_target(repo.path, dialog.selected_target)
+            row = self.repo_list.get_row(repo.path)
+            if row is not None:
+                row.set_release_target(dialog.selected_target)
+                row.append_logs([f"[RELEASE] Yüklendi -> {dialog.release_url}"])
+                row.set_status(RepoStatus.SUCCESS, "Release yüklendi")
+                row.set_expanded(True)
+            self._schedule_gist_push()
+
+    def _start_gist_pull(self) -> None:
+        self.toolbar.set_sync_status("Gist senkronize ediliyor...")
+        self._gist_pull_thread = _GistPullThread(self.store.load_gist_id())
+        self._gist_pull_thread.completed.connect(self._on_gist_pulled)
+        self._gist_pull_thread.start()
+
+    def _on_gist_pulled(self, gist_id: str | None, payload: dict | None) -> None:
+        if gist_id:
+            self.store.save_gist_id(gist_id)
+        if payload and payload.get("repos"):
+            self._repos = self.store.merge_remote_payload(payload)
+            self.repo_list.set_repos(self._repos)
+            self.toolbar.set_repo_count(len(self._repos))
+            self.toolbar.set_sync_status("Gist: Güncel")
+            return
+        if self._repos:
+            self._schedule_gist_push()
+        else:
+            self.toolbar.set_sync_status("Gist: Hazır")
+
+    def _schedule_gist_push(self) -> None:
+        if not self._sync_with_gist:
+            return
+        if self._gist_push_thread is not None and self._gist_push_thread.isRunning():
+            return
+        self.toolbar.set_sync_status("Gist güncelleniyor...")
+        self._gist_push_thread = _GistPushThread(
+            self.store.export_sync_payload(),
+            self.store.load_gist_id(),
+        )
+        self._gist_push_thread.completed.connect(self._on_gist_pushed)
+        self._gist_push_thread.start()
+
+    def _on_gist_pushed(self, ok: bool, gist_id: str | None) -> None:
+        if ok and gist_id:
+            self.store.save_gist_id(gist_id)
+            self.toolbar.set_sync_status("Gist: Güncel")
+        else:
+            self.toolbar.set_sync_status("Gist: Çevrimdışı")
 
     def run_fetch_all(self) -> None:
         """Run Fetch + Analyze across all tracked repositories."""
@@ -244,6 +380,7 @@ class MainWindow(QMainWindow):
                 row.set_step_checked(step, True)
             if opts.commit_message:
                 row.set_commit_message(opts.commit_message)
+        self._schedule_gist_push()
 
 
 def create_application(

@@ -10,6 +10,7 @@ class TopToolbar(QFrame):
     """Sleek top toolbar with brand header and primary repository actions."""
 
     add_repo_clicked = Signal()
+    map_folder_clicked = Signal()
     fetch_all_clicked = Signal()
     run_selected_clicked = Signal()
 
@@ -28,9 +29,17 @@ class TopToolbar(QFrame):
         self.count_badge.setObjectName("RepoCountBadge")
         self.count_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        self.sync_label = QLabel("", self)
+        self.sync_label.setObjectName("RepoPathLabel")
+
         self.add_repo_btn = QPushButton("+ Repo Ekle", self)
         self.add_repo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_repo_btn.clicked.connect(self.add_repo_clicked)
+
+        self.map_folder_btn = QPushButton("Klasör Eşle", self)
+        self.map_folder_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.map_folder_btn.setToolTip("Bu bilgisayardaki ana kod klasörünü tarayıp repoları eşle")
+        self.map_folder_btn.clicked.connect(self.map_folder_clicked)
 
         self.fetch_all_btn = QPushButton("Tümünü Fetch Et", self)
         self.fetch_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -43,8 +52,10 @@ class TopToolbar(QFrame):
 
         layout.addWidget(self.title_label)
         layout.addWidget(self.count_badge)
+        layout.addWidget(self.sync_label)
         layout.addStretch(1)
         layout.addWidget(self.add_repo_btn)
+        layout.addWidget(self.map_folder_btn)
         layout.addWidget(self.fetch_all_btn)
         layout.addWidget(self.run_selected_btn)
 
@@ -52,8 +63,13 @@ class TopToolbar(QFrame):
         """Update the repository count pill."""
         self.count_badge.setText(f"{count} repo")
 
+    def set_sync_status(self, text: str) -> None:
+        """Update subtle cloud Gist sync status text."""
+        self.sync_label.setText(text)
+
     def set_busy(self, busy: bool) -> None:
         """Enable or disable action buttons while workers are running."""
         self.add_repo_btn.setDisabled(busy)
+        self.map_folder_btn.setDisabled(busy)
         self.fetch_all_btn.setDisabled(busy)
         self.run_selected_btn.setDisabled(busy)

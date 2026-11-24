@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -23,6 +25,7 @@ from src.services.repo_worker import PipelineOptions
 STEP_KEYS = ("fetch", "analyze", "stash", "pull", "commit", "push")
 CHECKBOX_COL_WIDTH = 62
 STATUS_COL_WIDTH = 176
+RELEASE_COL_WIDTH = 86
 DELETE_COL_WIDTH = 30
 
 STATUS_DEFAULT_TEXT = {
@@ -40,6 +43,8 @@ class RepoRowWidget(QFrame):
     move_up_requested = Signal(str)
     move_down_requested = Signal(str)
     remove_requested = Signal(str)
+    release_requested = Signal(str)
+    remap_requested = Signal(str)
     commit_toggled = Signal(str, bool)
 
     def __init__(self, repo: RepoItem, parent: QWidget | None = None) -> None:
@@ -89,9 +94,15 @@ class RepoRowWidget(QFrame):
 
         self.name_label = QLabel(repo.name, info_widget)
         self.name_label.setObjectName("RepoNameLabel")
-        self.path_label = QLabel(repo.path, info_widget)
+        self._path_missing = not (repo.path and Path(repo.path).exists())
+        path_text = (
+            "⚠ Bu bilgisayarda klasör bulunamadı — Konum Seç"
+            if self._path_missing
+            else repo.path
+        )
+        self.path_label = QLabel(path_text, info_widget)
         self.path_label.setObjectName("RepoPathLabel")
-        self.path_label.setToolTip(repo.path)
+        self.path_label.setToolTip(repo.path or "Konum atanmamış")
 
         info_layout.addWidget(self.name_label)
         info_layout.addWidget(self.path_label)
@@ -117,15 +128,31 @@ class RepoRowWidget(QFrame):
             cell_layout.addWidget(cb)
             row_layout.addWidget(cell)
 
-        # Status pill badge (click toggles accordion)
-        self.status_btn = QPushButton(STATUS_DEFAULT_TEXT[repo.status], row_widget)
+        # Status pill badge (click toggles accordion, or remaps if path missing)
+        initial_status = RepoStatus.WARNING if self._path_missing else repo.status
+        initial_text = "⚠ Konum Seç" if self._path_missing else STATUS_DEFAULT_TEXT[repo.status]
+        self.status_btn = QPushButton(initial_text, row_widget)
         self.status_btn.setObjectName("StatusBadge")
         self.status_btn.setFixedWidth(STATUS_COL_WIDTH)
         self.status_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.status_btn.setToolTip("Log detayını aç / kapat")
-        self.status_btn.clicked.connect(self.toggle_expanded)
-        self._apply_status_style(repo.status)
+        self.status_btn.setToolTip(
+            "Bu bilgisayardaki repo klasörünü seç"
+            if self._path_missing
+            else "Log detayını aç / kapat"
+        )
+        self.status_btn.clicked.connect(self._on_status_clicked)
+        self._apply_status_style(initial_status)
         row_layout.addWidget(self.status_btn)
+
+        # Release upload button (color-coded by target: none/self/msklabsapps)
+        self.release_btn = QPushButton("Rel", row_widget)
+        self.release_btn.setObjectName("ReleaseButton")
+        self.release_btn.setFixedWidth(RELEASE_COL_WIDTH)
+        self.release_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.release_btn.setToolTip("GitHub Releases'a derlenmiş dosya yükle")
+        self.release_btn.clicked.connect(lambda: self.release_requested.emit(self.repo_path))
+        self.set_release_target(repo.release_target)
+        row_layout.addWidget(self.release_btn)
 
         # Delete button
         self.delete_btn = QPushButton("✕", row_widget)
@@ -205,6 +232,27 @@ class RepoRowWidget(QFrame):
         self.status_btn.setProperty("status", status.value)
         self.status_btn.style().unpolish(self.status_btn)
         self.status_btn.style().polish(self.status_btn)
+
+    def set_release_target(self, target: str) -> None:
+        """Update Release button label and color based on saved target."""
+        if target == "self":
+            self.release_btn.setText("Rel: Özel")
+            prop = "self"
+        elif target == "msklabsapps":
+            self.release_btn.setText("Rel: Public")
+            prop = "msklabsapps"
+        else:
+            self.release_btn.setText("Rel")
+            prop = "none"
+        self.release_btn.setProperty("rel_target", prop)
+        self.release_btn.style().unpolish(self.release_btn)
+        self.release_btn.style().polish(self.release_btn)
+
+    def _on_status_clicked(self) -> None:
+        if self._path_missing:
+            self.remap_requested.emit(self.repo_path)
+            return
+        self.toggle_expanded()
 
     def set_expanded(self, expanded: bool) -> None:
         """Expand or collapse the inline accordion log drawer."""

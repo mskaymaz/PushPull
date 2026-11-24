@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import socket
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -68,6 +70,9 @@ class RepoItem:
     status: RepoStatus = RepoStatus.IDLE
     logs: list[str] = field(default_factory=list)
     history: list[RepoRunRecord] = field(default_factory=list)
+    release_target: str = ""
+    remote_url: str = ""
+    paths_by_host: dict[str, str] = field(default_factory=dict)
     ahead: int = 0
     behind: int = 0
     dirty_count: int = 0
@@ -79,13 +84,34 @@ class RepoItem:
             "name": self.name,
             "path": self.path,
             "order": self.order,
+            "release_target": self.release_target,
+            "remote_url": self.remote_url,
+            "paths_by_host": dict(self.paths_by_host),
             "history": [rec.to_dict() for rec in self.history[:MAX_HISTORY_PER_REPO]],
+        }
+
+    def to_sync_dict(self) -> dict[str, Any]:
+        """Serialize lightweight shared fields for GitHub Gist sync."""
+        return {
+            "name": self.name,
+            "path": self.path,
+            "order": self.order,
+            "release_target": self.release_target,
+            "remote_url": self.remote_url,
+            "paths_by_host": dict(self.paths_by_host),
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], default_order: int = 0) -> RepoItem:
         """Create a RepoItem from a serialized dictionary."""
-        raw_path = str(data.get("path", "")).strip()
+        host = socket.gethostname()
+        raw_paths = data.get("paths_by_host", {})
+        paths_by_host = (
+            {str(k): str(v) for k, v in raw_paths.items()}
+            if isinstance(raw_paths, dict)
+            else {}
+        )
+        raw_path = str(paths_by_host.get(host) or data.get("path", "")).strip()
         fallback_name = Path(raw_path).name if raw_path else "repo"
         name = str(data.get("name") or fallback_name).strip()
         order = int(data.get("order", default_order))
@@ -95,7 +121,18 @@ class RepoItem:
             for entry in raw_history[:MAX_HISTORY_PER_REPO]
             if isinstance(entry, dict)
         ]
-        return cls(name=name, path=raw_path, order=order, history=history)
+        raw_target = str(data.get("release_target", "")).strip()
+        release_target = raw_target if raw_target in ("self", "msklabsapps") else ""
+        remote_url = str(data.get("remote_url", "")).strip()
+        return cls(
+            name=name,
+            path=raw_path,
+            order=order,
+            history=history,
+            release_target=release_target,
+            remote_url=remote_url,
+            paths_by_host=paths_by_host,
+        )
 
 
 @dataclass
