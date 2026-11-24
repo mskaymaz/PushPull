@@ -177,7 +177,9 @@ def commit(repo_path: str | Path, message: str = "") -> RepoRunResult:
             logs=logs,
         )
 
-    commit_msg = message.strip() or f"Auto-commit: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    stamp = datetime.now().strftime("%y.%m.%d_%H.%M")
+    user_note = message.strip()
+    commit_msg = f"{user_note} {stamp}" if user_note else stamp
     commit_res = run_git(path_str, ["commit", "-m", commit_msg])
     logs.extend(_result_logs("commit", commit_res))
     return RepoRunResult(

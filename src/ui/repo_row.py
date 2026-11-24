@@ -152,7 +152,7 @@ class RepoRowWidget(QFrame):
         self.commit_input = QLineEdit(self.commit_bar)
         self.commit_input.setObjectName("CommitInput")
         self.commit_input.setPlaceholderText(
-            "Boş bırakılırsa otomatik üretilir: Auto-commit: YYYY-AA-GG SS:DD"
+            "Opsiyonel not ekleyin (commit anında sonuna otomatik yy.aa.gg_ss.dd eklenir)"
         )
         self.commit_input.textChanged.connect(self.set_commit_message)
 
