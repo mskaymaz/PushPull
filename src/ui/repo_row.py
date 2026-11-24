@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
@@ -24,8 +25,9 @@ from src.services.repo_worker import PipelineOptions
 
 STEP_KEYS = ("fetch", "analyze", "stash", "pull", "commit", "push")
 CHECKBOX_COL_WIDTH = 62
-STATUS_COL_WIDTH = 176
+STATUS_COL_WIDTH = 146
 RELEASE_COL_WIDTH = 86
+DOWNLOAD_COL_WIDTH = 30
 DELETE_COL_WIDTH = 30
 
 STATUS_DEFAULT_TEXT = {
@@ -37,6 +39,35 @@ STATUS_DEFAULT_TEXT = {
 }
 
 
+def _make_download_icon() -> QIcon:
+    """Create a crisp vector download tray-and-arrow icon for light theme."""
+    icon = QIcon()
+    for mode, color_hex in (
+        (QIcon.Mode.Normal, "#2563EB"),
+        (QIcon.Mode.Disabled, "#CBD5E1"),
+    ):
+        pix = QPixmap(16, 16)
+        pix.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pix)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor(color_hex), 1.8)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        # Vertical shaft
+        painter.drawLine(8, 2, 8, 10)
+        # Arrow head
+        painter.drawLine(5, 7, 8, 10)
+        painter.drawLine(11, 7, 8, 10)
+        # Bottom tray
+        painter.drawLine(3, 12, 3, 14)
+        painter.drawLine(3, 14, 13, 14)
+        painter.drawLine(13, 14, 13, 12)
+        painter.end()
+        icon.addPixmap(pix, mode)
+    return icon
+
+
 class RepoRowWidget(QFrame):
     """Compact repository row card with an inline expandable accordion log drawer."""
 
@@ -44,6 +75,7 @@ class RepoRowWidget(QFrame):
     move_down_requested = Signal(str)
     remove_requested = Signal(str)
     release_requested = Signal(str)
+    download_requested = Signal(str)
     remap_requested = Signal(str)
     commit_toggled = Signal(str, bool)
 
@@ -151,8 +183,19 @@ class RepoRowWidget(QFrame):
         self.release_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.release_btn.setToolTip("GitHub Releases'a derlenmiş dosya yükle")
         self.release_btn.clicked.connect(lambda: self.release_requested.emit(self.repo_path))
-        self.set_release_target(repo.release_target)
         row_layout.addWidget(self.release_btn)
+
+        # Latest release download button
+        self.download_btn = QPushButton("", row_widget)
+        self.download_btn.setObjectName("RowIconButton")
+        self.download_btn.setIcon(_make_download_icon())
+        self.download_btn.setIconSize(QSize(15, 15))
+        self.download_btn.setFixedSize(DOWNLOAD_COL_WIDTH, 26)
+        self.download_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.download_btn.clicked.connect(lambda: self.download_requested.emit(self.repo_path))
+        row_layout.addWidget(self.download_btn)
+
+        self.set_release_target(repo.release_target)
 
         # Delete button
         self.delete_btn = QPushButton("✕", row_widget)
@@ -234,16 +277,22 @@ class RepoRowWidget(QFrame):
         self.status_btn.style().polish(self.status_btn)
 
     def set_release_target(self, target: str) -> None:
-        """Update Release button label and color based on saved target."""
+        """Update Release button label, color, and download availability."""
         if target == "self":
             self.release_btn.setText("Rel: Özel")
             prop = "self"
+            self.download_btn.setEnabled(True)
+            self.download_btn.setToolTip("Son sürümü kendi Releases'ından indir")
         elif target == "msklabsapps":
             self.release_btn.setText("Rel: Public")
             prop = "msklabsapps"
+            self.download_btn.setEnabled(True)
+            self.download_btn.setToolTip("Son sürümü MSKLabsApps Releases'tan indir")
         else:
             self.release_btn.setText("Rel")
             prop = "none"
+            self.download_btn.setEnabled(False)
+            self.download_btn.setToolTip("İndirmek için önce Release hedefi seçin")
         self.release_btn.setProperty("rel_target", prop)
         self.release_btn.style().unpolish(self.release_btn)
         self.release_btn.style().polish(self.release_btn)

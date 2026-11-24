@@ -17,6 +17,7 @@ from src.models.repo_models import RepoItem
 from src.ui.repo_row import (
     CHECKBOX_COL_WIDTH,
     DELETE_COL_WIDTH,
+    DOWNLOAD_COL_WIDTH,
     RELEASE_COL_WIDTH,
     STATUS_COL_WIDTH,
     RepoRowWidget,
@@ -74,6 +75,10 @@ class TableHeader(QFrame):
         release_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(release_label)
 
+        download_spacer = QWidget(self)
+        download_spacer.setFixedWidth(DOWNLOAD_COL_WIDTH)
+        layout.addWidget(download_spacer)
+
         delete_spacer = QWidget(self)
         delete_spacer.setFixedWidth(DELETE_COL_WIDTH)
         layout.addWidget(delete_spacer)
@@ -86,6 +91,7 @@ class RepoListWidget(QWidget):
     move_down_requested = Signal(str)
     remove_requested = Signal(str)
     release_requested = Signal(str)
+    download_requested = Signal(str)
     remap_requested = Signal(str)
     commit_toggled = Signal(str, bool)
 
@@ -143,6 +149,7 @@ class RepoListWidget(QWidget):
             row.move_down_requested.connect(self.move_down_requested)
             row.remove_requested.connect(self.remove_requested)
             row.release_requested.connect(self.release_requested)
+            row.download_requested.connect(self.download_requested)
             row.remap_requested.connect(self.remap_requested)
             row.commit_toggled.connect(self.commit_toggled)
 
