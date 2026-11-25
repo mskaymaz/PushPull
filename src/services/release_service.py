@@ -14,6 +14,8 @@ from typing import Callable
 from src.services.git_runner import CREATE_NO_WINDOW, run_git
 
 PUBLIC_RELEASE_REPO = "mskaymaz/MSKLabsApps"
+CF_DL_BASE = "https://msklabsdesk-backend.msklabs-org.workers.dev/dl"
+CF_R2_BASE = "https://releases.msklabs.org"
 
 
 def detect_repo_slug(repo_path: str | Path) -> str | None:
@@ -240,6 +242,57 @@ def _get_release_assets(tag: str, target_repo: str) -> list[dict]:
         return []
 
 
+def _build_cloudflare_candidates(
+    repo_name: str,
+    tag: str,
+    asset_name: str,
+) -> list[str]:
+    """Build ordered Cloudflare Worker (/dl/) and R2 (releases.msklabs.org) URLs."""
+    slug = to_app_slug(repo_name)
+    slug_variants = [slug]
+    if "-" in slug:
+        slug_variants.append(slug.replace("-", "_"))
+
+    prefix = f"{slug}-"
+    version = tag[len(prefix):] if tag.startswith(prefix) else tag
+
+    urls: list[str] = []
+    for s in slug_variants:
+        urls.append(f"{CF_DL_BASE}/{s}/{version}")
+        urls.append(f"{CF_R2_BASE}/{s}/{version}/{asset_name}")
+    return urls
+
+
+def _stream_url_to_file(
+    url: str,
+    final_path: Path,
+    headers: dict[str, str],
+    expected_size: int = 0,
+    progress_cb: Callable[[int, int], None] | None = None,
+) -> tuple[bool, str]:
+    """Download a URL to a .part file and atomically rename on completion."""
+    part_path = final_path.with_name(f"{final_path.name}.part")
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            total_size = expected_size or int(resp.headers.get("Content-Length") or 0)
+            downloaded = 0
+            with part_path.open("wb") as out_f:
+                while True:
+                    chunk = resp.read(262144)
+                    if not chunk:
+                        break
+                    out_f.write(chunk)
+                    downloaded += len(chunk)
+                    if progress_cb is not None:
+                        progress_cb(downloaded, total_size)
+        part_path.replace(final_path)
+        return True, str(final_path)
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        part_path.unlink(missing_ok=True)
+        return False, str(exc)
+
+
 def download_latest_release(
     repo_name: str,
     repo_path: str | Path,
@@ -247,7 +300,7 @@ def download_latest_release(
     dest_dir: str,
     progress_cb: Callable[[int, int], None] | None = None,
 ) -> tuple[bool, str, str]:
-    """Stream the latest release asset into dest_dir with live byte progress."""
+    """Stream the latest release asset into dest_dir (Cloudflare CDN first for public, GitHub fallback)."""
     if target == "msklabsapps":
         target_repo = PUBLIC_RELEASE_REPO
         is_public = True
@@ -276,33 +329,35 @@ def download_latest_release(
     out_dir = Path(dest_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     final_path = out_dir / asset_name
-    part_path = out_dir / f"{asset_name}.part"
 
-    headers = {
+    if is_public:
+        cf_headers = {"User-Agent": "PushPull"}
+        for cf_url in _build_cloudflare_candidates(repo_name, tag, asset_name):
+            ok, msg = _stream_url_to_file(
+                cf_url,
+                final_path,
+                cf_headers,
+                expected_size=total_size,
+                progress_cb=progress_cb,
+            )
+            if ok:
+                return True, tag, f"{msg} (Cloudflare CDN)"
+
+    gh_headers = {
         "User-Agent": "PushPull",
         "Accept": "application/octet-stream",
     }
     token = _get_gh_token()
     if token:
-        headers["Authorization"] = f"Bearer {token}"
+        gh_headers["Authorization"] = f"Bearer {token}"
 
-    req = urllib.request.Request(api_url, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            if total_size <= 0:
-                total_size = int(resp.headers.get("Content-Length") or 0)
-            downloaded = 0
-            with part_path.open("wb") as out_f:
-                while True:
-                    chunk = resp.read(262144)
-                    if not chunk:
-                        break
-                    out_f.write(chunk)
-                    downloaded += len(chunk)
-                    if progress_cb is not None:
-                        progress_cb(downloaded, total_size)
-        part_path.replace(final_path)
-        return True, tag, f"{final_path}"
-    except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        part_path.unlink(missing_ok=True)
-        return False, tag, f"İndirme hatası: {exc}"
+    ok, msg = _stream_url_to_file(
+        api_url,
+        final_path,
+        gh_headers,
+        expected_size=total_size,
+        progress_cb=progress_cb,
+    )
+    if ok:
+        return True, tag, f"{msg} (GitHub)"
+    return False, tag, f"İndirme hatası: {msg}"

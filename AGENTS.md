@@ -14,7 +14,7 @@
 - **Anti-Flattery & Honesty:** Act as an objective, rigorous engineer. No praise or filler. State risks, flaws, and better technical alternatives directly.
 
 ## 2. Token Economy & SafePatch Protocol (SPP)
-- Keep replies concise and bulleted: **5-8 lines** for status updates, **10-15 lines** for technical explanations. No intro/outro filler.
+- Keep replies concise, bulleted, and **strictly <= 10 lines total** (1-3 lines for Yes/No, max 1-2 lines/single sentence per bullet). No unrequested elaboration unless asked.
 - Read ONLY target files and immediate context; avoid repo-wide scans for small/targeted tasks.
 - **SPP:** 1) Verify target files and exact lines -> 2) Apply smallest safe patch -> 3) Verify diff/run/tests -> 4) Report briefly. Fail-fast on errors; NEVER guess.
 - **`>150` Line Diff-Only Rule:** For any file longer than 150 lines, NEVER rewrite the whole file; edit ONLY the affected functions or blocks.
@@ -30,6 +30,7 @@
 - Use **SSH** (`git@github.com:...`) for remotes; verify `user.name` / `user.email` before commits.
 - **Local-First Verification:** Every change must be verified locally (run app / real git command test / diff check). Mock-only tests are NOT accepted as Done.
 - NEVER run `git commit`, `git push`, or merge/rebase without explicit user approval.
+- **Commit Format:** Summarize the change clearly in Turkish followed by `(yy/mm/dd_hh.mm)` (e.g., `Yeni kural eklendi (26/11/25_15.42)`).
 
 ## 4. Universal Multilingual & Interface Base
 - **Mandatory i18n (`TR / EN / AR`):** Application MUST support **TR, EN, and AR (Arabic)** from day one across all UI strings, tooltips, and status badges.
@@ -46,3 +47,7 @@
   - **Commit Message Popover:** Checking `Commit` opens an inline/floating text input; if left empty, auto-generates `Auto-commit: YYYY-MM-DD HH:MM`.
 - **Safe Execution Pipeline:** Fixed per-repo order: `Fetch` -> `Analyze (ahead/behind + dirty count)` -> `Stash (if selected)` -> `Pull` -> `Commit` -> `Push`. Stop subsequent steps for that repo on failure and auto-expand its accordion.
 - **Persistence:** Store repo list, display order, and preferences in a local `repos.json` file.
+
+## Ekosistem Telemetri & Dağıtım Kuralı (IST-013 / IST-016 / IST-017)
+- Uygulama güncelleme veya yeni sürüm yayınlama işlerinde kök dizindeki `ECO_TELEMETRY_GUIDE.md` (ve merkezi `D:\Code\istisare\istisareler\017-eco-sdk-istemci-entegrasyon-rehberi.md`) kuralları **zorunlu** olarak uygulanır.
+- Kapanışta telemetri atılmaz; açılışta `launch_count` biriktirilip ilk/yeniden kurulumda, sürüm değişiminde ve 7 günde 1 gönderilir. Ayarlara opt-out anahtarı/pop-up konulmaz (mağaza uygulamalarında `privacy.html` & Data Safety beyanı korunur).
