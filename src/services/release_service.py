@@ -37,17 +37,53 @@ def to_app_slug(name: str) -> str:
     return cleaned or "app"
 
 
-def suggest_artifact(repo_path: str | Path) -> str:
-    """Return the first likely compiled binary (.exe or .apk) inside repo_path."""
-    root = Path(repo_path)
-    candidates = [
-        *(root / "dist").glob("*.exe"),
-        *(root / "build" / "app" / "outputs" / "flutter-apk").glob("*.apk"),
+def _norm_token(value: str) -> str:
+    """Normalize a repo or file stem for matching (strip M_/D_/W_ prefixes)."""
+    stripped = re.sub(r"^[a-zA-Z]_", "", value.strip())
+    return re.sub(r"[^a-zA-Z0-9]+", "", stripped).lower()
+
+
+def _pick_preferred_binary(
+    candidates: list[Path],
+    repo_name: str,
+    fallback_stem: str | None = None,
+) -> Path | None:
+    """Pick the release binary matching repo_name or fallback_stem, excluding debug/profile."""
+    valid = [
+        p for p in candidates
+        if p.is_file() and not any(bad in p.stem.lower() for bad in ("debug", "profile", "unins"))
     ]
-    for path in candidates:
-        if path.is_file():
-            return str(path)
-    return ""
+    if not valid:
+        return None
+
+    target_tok = _norm_token(repo_name)
+    for path in valid:
+        if _norm_token(path.stem) == target_tok:
+            return path
+
+    if fallback_stem:
+        for path in valid:
+            if path.stem.lower() == fallback_stem:
+                return path
+
+    return max(valid, key=lambda p: p.stat().st_mtime)
+
+
+def suggest_artifact(repo_path: str | Path) -> str:
+    """Return the release binary (.exe or .apk) inside repo_path, excluding debug builds."""
+    root = Path(repo_path)
+    repo_name = root.name
+
+    exe = _pick_preferred_binary(list((root / "dist").glob("*.exe")), repo_name)
+    if exe is not None:
+        return str(exe)
+
+    apk = _pick_preferred_binary(
+        list((root / "build" / "app" / "outputs" / "flutter-apk").glob("*.apk")),
+        repo_name,
+        fallback_stem="app-release",
+    )
+    return str(apk) if apk is not None else ""
 
 
 def fetch_latest_public_version(app_slug: str) -> tuple[int, int, int] | None:

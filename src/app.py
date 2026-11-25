@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QThread, QThreadPool, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -85,6 +86,10 @@ class MainWindow(QMainWindow):
     ) -> None:
         super().__init__()
         self.setWindowTitle("PushPull")
+        icon_base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+        icon_path = icon_base / "assets" / "pushpull.ico"
+        if icon_path.is_file():
+            self.setWindowIcon(QIcon(str(icon_path)))
         self.resize(1120, 720)
         self.setMinimumSize(940, 560)
 
