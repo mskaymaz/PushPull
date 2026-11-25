@@ -51,3 +51,11 @@
 ## Ekosistem Telemetri & Dağıtım Kuralı (IST-013 / IST-016 / IST-017)
 - Uygulama güncelleme veya yeni sürüm yayınlama işlerinde kök dizindeki `ECO_TELEMETRY_GUIDE.md` (ve merkezi `D:\Code\istisare\istisareler\017-eco-sdk-istemci-entegrasyon-rehberi.md`) kuralları **zorunlu** olarak uygulanır.
 - Kapanışta telemetri atılmaz; açılışta `launch_count` biriktirilip ilk/yeniden kurulumda, sürüm değişiminde ve 7 günde 1 gönderilir. Ayarlara opt-out anahtarı/pop-up konulmaz (mağaza uygulamalarında `privacy.html` & Data Safety beyanı korunur).
+
+
+## Zorunlu Release, Tag & İkili Dosya Adlandırma Kuralı (IST-015 / IST-016)
+> **SSOT:** `D:\Code\istisare\istisareler\015-merkezi-release-tag-ve-surum-yayin-protokolu.md` (`IST-015`) & `016-melez-hizli-dagitim-r2-ve-worker-cache-mimarisi.md` (`IST-016`).
+
+- **Git Geçmişine İkili Dosya Konmaz:** Derlenen dosyalar (`dist/`, `build/`, `*.exe`, `*.apk`, `*.zip`) `.gitignore` içinde kalır; dağıtım yalnızca **GitHub Releases / R2** üzerinden yapılır.
+- **Genel / Debug Dosya Adı Yasağı (Yerel + Uzak):** Yerel debug/release derlemelerinde (`PyInstaller --name`, Flutter çıktı adı vb.) ve uzak Release'lerde `main.exe`, `app.exe`, `app-release.apk`, `app-debug.apk` veya `release.apk` gibi genel isimler **kesinlikle kullanılmaz**. Yerel çıktılar daima gerçek uygulama adıyla (ör. `RekatSay-debug.apk`, `PushPull.exe`), yayınlanan/indirilen release dosyaları ise **`<UygulamaAdı>-<sürüm>.<uzantı>`** (ör. `RekatSay-v1.3.1.apk`, `PushPull-v1.0.2.exe`) formatında üretilir.
+- **Kesin Hedef Ayrımı:** Son kullanıcıya açık (Public) uygulamalar **`mskaymaz/MSKLabsApps` Releases** (`<app-slug>-vX.Y.Z` tag'iyle) + Cloudflare R2 (`r2_keep_versions: 2`) üzerinden; bireysel/iç araçlar (`PushPull`, `TokenGemini` vb.) ise **kendi GitHub reposunun Releases sekmesinden** yayınlanır.

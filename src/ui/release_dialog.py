@@ -34,12 +34,14 @@ class _ReleaseUploadThread(QThread):
         tag: str,
         file_path: str,
         notes: str,
+        repo_name: str = "",
     ) -> None:
         super().__init__()
         self.target_repo = target_repo
         self.tag = tag
         self.file_path = file_path
         self.notes = notes
+        self.repo_name = repo_name
 
     def run(self) -> None:
         ok, msg = upload_release(
@@ -47,6 +49,7 @@ class _ReleaseUploadThread(QThread):
             tag=self.tag,
             file_path=self.file_path,
             notes=self.notes,
+            repo_name=self.repo_name,
         )
         self.completed.emit(ok, msg)
 
@@ -176,6 +179,7 @@ class ReleaseDialog(QDialog):
             tag=tag,
             file_path=file_path,
             notes=self.notes_input.text(),
+            repo_name=self.repo_name,
         )
         self._worker.completed.connect(self._on_upload_finished)
         self._worker.start()

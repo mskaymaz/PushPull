@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
+import tempfile
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -139,49 +141,93 @@ def suggest_tag(repo_name: str, target: str) -> str:
     return f"v{stamp}"
 
 
+def _strip_repo_prefix(repo_name: str) -> str:
+    """Remove M_/D_/W_ prefix and keep clean display name for release filenames."""
+    cleaned = re.sub(r"^[a-zA-Z]_", "", repo_name.strip())
+    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "", cleaned)
+    return cleaned or "App"
+
+
+def _extract_version_part(repo_name: str, tag: str) -> str:
+    """Extract version suffix from tag (e.g., rekatsay-v1.3.1 -> v1.3.1)."""
+    clean_tag = tag.strip()
+    for candidate in (repo_name, _strip_repo_prefix(repo_name)):
+        prefix = f"{to_app_slug(candidate)}-"
+        if clean_tag.startswith(prefix):
+            return clean_tag[len(prefix):]
+    return clean_tag
+
+
+def _is_generic_binary_name(filename: str, repo_name: str) -> bool:
+    """Return True if filename is generic (e.g., app-release.apk) or lacks app identity."""
+    stem_low = Path(filename).stem.lower()
+    if stem_low in {"app-release", "app", "release", "app-debug", "main", "output"}:
+        return True
+    app_tok = _norm_token(repo_name)
+    return bool(app_tok) and app_tok not in _norm_token(stem_low)
+
+
+def build_standard_binary_name(repo_name: str, tag: str, ext: str) -> str:
+    """Build `<AppName>-<version><ext>` filename per IST-015."""
+    app_label = _strip_repo_prefix(repo_name)
+    ver = _extract_version_part(repo_name, tag)
+    suffix = ext if ext.startswith(".") else f".{ext}" if ext else ""
+    return f"{app_label}-{ver}{suffix}"
+
+
 def upload_release(
     target_repo: str,
     tag: str,
     file_path: str,
     title: str = "",
     notes: str = "",
+    repo_name: str = "",
 ) -> tuple[bool, str]:
-    """Upload a compiled binary to GitHub Releases via `gh release create`."""
+    """Upload a compiled binary to GitHub Releases via `gh release create` with IST-015 naming."""
     artifact = Path(file_path)
     if not artifact.is_file():
         return False, f"Dosya bulunamadı: {file_path}"
 
-    release_title = title.strip() or f"{artifact.stem} ({tag})"
-    cmd = [
-        "gh",
-        "release",
-        "create",
-        tag.strip(),
-        str(artifact),
-        "-R",
-        target_repo.strip(),
-        "--title",
-        release_title,
-        "--notes",
-        notes.strip() or f"Yükleme tarihi: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-    ]
+    app_name = repo_name.strip() or target_repo.strip().split("/")[-1]
+    release_title = title.strip() or f"{_strip_repo_prefix(app_name)} ({tag})"
 
-    try:
-        completed = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,
-            creationflags=CREATE_NO_WINDOW,
-        )
-    except FileNotFoundError:
-        return False, "Sistemde 'gh' (GitHub CLI) bulunamadı."
-    except subprocess.TimeoutExpired:
-        return False, "Release yükleme zaman aşımına uğradı (300s)."
-    except OSError as exc:
-        return False, f"Release yükleme hatası: {exc}"
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        upload_path = artifact
+        if _is_generic_binary_name(artifact.name, app_name):
+            std_name = build_standard_binary_name(app_name, tag, artifact.suffix)
+            upload_path = Path(tmp_dir) / std_name
+            shutil.copy2(artifact, upload_path)
+
+        cmd = [
+            "gh",
+            "release",
+            "create",
+            tag.strip(),
+            str(upload_path),
+            "-R",
+            target_repo.strip(),
+            "--title",
+            release_title,
+            "--notes",
+            notes.strip() or f"Yükleme tarihi: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        ]
+
+        try:
+            completed = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+                creationflags=CREATE_NO_WINDOW,
+            )
+        except FileNotFoundError:
+            return False, "Sistemde 'gh' (GitHub CLI) bulunamadı."
+        except subprocess.TimeoutExpired:
+            return False, "Release yükleme zaman aşımına uğradı (300s)."
+        except OSError as exc:
+            return False, f"Release yükleme hatası: {exc}"
 
     if completed.returncode == 0:
         url = (completed.stdout or "").strip().splitlines()[-1] if completed.stdout.strip() else ""
@@ -364,7 +410,12 @@ def download_latest_release(
 
     out_dir = Path(dest_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    final_path = out_dir / asset_name
+    local_name = (
+        build_standard_binary_name(repo_name, tag, Path(asset_name).suffix or ".bin")
+        if _is_generic_binary_name(asset_name, repo_name)
+        else asset_name
+    )
+    final_path = out_dir / local_name
 
     if is_public:
         cf_headers = {"User-Agent": "PushPull"}
