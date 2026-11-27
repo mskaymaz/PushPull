@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import socket
 import sys
 from pathlib import Path
@@ -12,11 +13,13 @@ from typing import Any
 from src.models.repo_models import MAX_HISTORY_PER_REPO, RepoItem, RepoRunRecord
 from src.services.git_runner import run_git
 
-DEFAULT_CONFIG_PATH = (
-    Path(sys.executable).parent / "repos.json"
-    if getattr(sys, "frozen", False)
-    else Path("repos.json")
-)
+
+def _default_config_path() -> Path:
+    base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+    return base / "MSKLabs" / "PushPull" / "repos.json"
+
+
+DEFAULT_CONFIG_PATH = _default_config_path()
 
 
 def _normalize_path(path: str) -> str:
@@ -42,6 +45,24 @@ class ConfigStore:
 
     def __init__(self, config_path: Path | str = DEFAULT_CONFIG_PATH) -> None:
         self.config_path = Path(config_path)
+        if self.config_path == DEFAULT_CONFIG_PATH and not self.config_path.exists():
+            self._migrate_legacy_config()
+
+    def _migrate_legacy_config(self) -> None:
+        """One-time migration from exe/cwd repos.json into LocalAppData."""
+        candidates = (
+            [Path(sys.executable).parent / "repos.json", Path("repos.json")]
+            if getattr(sys, "frozen", False)
+            else [Path("repos.json")]
+        )
+        for legacy in candidates:
+            if legacy.is_file():
+                try:
+                    self.config_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(legacy, self.config_path)
+                except OSError:
+                    pass
+                break
 
     def _read_raw(self) -> dict[str, Any]:
         if not self.config_path.exists():
@@ -162,13 +183,20 @@ class ConfigStore:
         self.save_repos(reordered)
         return reordered
 
-    def set_release_target(self, repo_path: str, target: str) -> list[RepoItem]:
-        """Persist the release target ('self' or 'msklabsapps') for a repository."""
+    def set_release_target(
+        self,
+        repo_path: str,
+        target: str,
+        release_dir: str = "",
+    ) -> list[RepoItem]:
+        """Persist the release target and last release directory for a repository."""
         repos = self.load_repos()
         target_norm = _normalize_path(repo_path)
         for repo in repos:
             if _normalize_path(repo.path) == target_norm:
                 repo.release_target = target if target in ("self", "msklabsapps") else ""
+                if release_dir.strip():
+                    repo.release_dir = release_dir.strip()
                 break
         self.save_repos(repos)
         return repos
@@ -260,6 +288,7 @@ class ConfigStore:
             local_match = local_by_key.get(key)
             if local_match is not None:
                 remote_item.history = local_match.history
+                remote_item.release_dir = local_match.release_dir
                 if host in local_match.paths_by_host:
                     remote_item.paths_by_host[host] = local_match.paths_by_host[host]
                     remote_item.path = local_match.paths_by_host[host]

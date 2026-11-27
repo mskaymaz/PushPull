@@ -71,6 +71,7 @@ class RepoItem:
     logs: list[str] = field(default_factory=list)
     history: list[RepoRunRecord] = field(default_factory=list)
     release_target: str = ""
+    release_dir: str = ""
     remote_url: str = ""
     paths_by_host: dict[str, str] = field(default_factory=dict)
     ahead: int = 0
@@ -85,6 +86,7 @@ class RepoItem:
             "path": self.path,
             "order": self.order,
             "release_target": self.release_target,
+            "release_dir": self.release_dir,
             "remote_url": self.remote_url,
             "paths_by_host": dict(self.paths_by_host),
             "history": [rec.to_dict() for rec in self.history[:MAX_HISTORY_PER_REPO]],
@@ -97,6 +99,7 @@ class RepoItem:
             "path": self.path,
             "order": self.order,
             "release_target": self.release_target,
+            "release_dir": self.release_dir,
             "remote_url": self.remote_url,
             "paths_by_host": dict(self.paths_by_host),
         }
@@ -123,6 +126,7 @@ class RepoItem:
         ]
         raw_target = str(data.get("release_target", "")).strip()
         release_target = raw_target if raw_target in ("self", "msklabsapps") else ""
+        release_dir = str(data.get("release_dir", "")).strip()
         remote_url = str(data.get("remote_url", "")).strip()
         return cls(
             name=name,
@@ -130,6 +134,7 @@ class RepoItem:
             order=order,
             history=history,
             release_target=release_target,
+            release_dir=release_dir,
             remote_url=remote_url,
             paths_by_host=paths_by_host,
         )

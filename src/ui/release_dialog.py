@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -20,6 +22,7 @@ from src.services.release_service import (
     PUBLIC_RELEASE_REPO,
     detect_repo_slug,
     suggest_artifact,
+    suggest_artifact_dir,
     suggest_tag,
     upload_release,
 )
@@ -62,6 +65,7 @@ class ReleaseDialog(QDialog):
         repo_name: str,
         repo_path: str,
         saved_target: str = "",
+        saved_release_dir: str = "",
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -69,6 +73,8 @@ class ReleaseDialog(QDialog):
         self.setMinimumWidth(520)
         self.repo_name = repo_name
         self.repo_path = repo_path
+        self.saved_release_dir = saved_release_dir
+        self.selected_release_dir = saved_release_dir
         self.own_slug = detect_repo_slug(repo_path) or ""
         self.selected_target = saved_target if saved_target in ("self", "msklabsapps") else "self"
         self.release_url = ""
@@ -107,7 +113,7 @@ class ReleaseDialog(QDialog):
         # File chooser
         layout.addWidget(QLabel("Yüklenecek Dosya (.exe / .apk / .zip):", self))
         file_row = QHBoxLayout()
-        self.file_input = QLineEdit(suggest_artifact(repo_path), self)
+        self.file_input = QLineEdit(suggest_artifact(repo_path, saved_release_dir), self)
         self.browse_btn = QPushButton("Gözat...", self)
         self.browse_btn.clicked.connect(self._browse_file)
         file_row.addWidget(self.file_input, 1)
@@ -145,14 +151,20 @@ class ReleaseDialog(QDialog):
         self.tag_input.setText(suggest_tag(self.repo_name, self.selected_target))
 
     def _browse_file(self) -> None:
+        start_dir = suggest_artifact_dir(
+            self.repo_path,
+            self.file_input.text(),
+            self.saved_release_dir,
+        )
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Release Dosyası Seç",
-            self.repo_path,
+            start_dir,
             "Uygulama / Arşiv (*.exe *.apk *.zip *.msi);;Tüm Dosyalar (*.*)",
         )
         if path:
             self.file_input.setText(path)
+            self.selected_release_dir = str(Path(path).parent)
 
     def _start_upload(self) -> None:
         target_repo = self.own_slug if self.selected_target == "self" else PUBLIC_RELEASE_REPO
@@ -170,6 +182,7 @@ class ReleaseDialog(QDialog):
             QMessageBox.warning(self, "Eksik Bilgi", "Dosya ve Release Tag alanları zorunludur.")
             return
 
+        self.selected_release_dir = str(Path(file_path).parent)
         self.upload_btn.setDisabled(True)
         self.cancel_btn.setDisabled(True)
         self.status_label.setText(f"Yükleniyor ({target_repo} -> {tag})...")

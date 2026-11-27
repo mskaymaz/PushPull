@@ -71,21 +71,58 @@ def _pick_preferred_binary(
     return max(valid, key=lambda p: p.stat().st_mtime)
 
 
-def suggest_artifact(repo_path: str | Path) -> str:
-    """Return the release binary (.exe or .apk) inside repo_path, excluding debug builds."""
+_ARTIFACT_SPECS = (
+    ("dist", "*.exe", None),
+    ("build/app/outputs/flutter-apk", "*.apk", "app-release"),
+    ("build/windows/x64/runner/Release", "*.exe", None),
+    ("build/windows/runner/Release", "*.exe", None),
+    ("release", "*.exe", None),
+    ("release", "*.apk", "app-release"),
+    ("releases", "*.exe", None),
+    ("releases", "*.apk", "app-release"),
+)
+
+
+def suggest_artifact(repo_path: str | Path, saved_release_dir: str = "") -> str:
+    """Return the release binary (.exe or .apk) inside saved_release_dir or repo_path."""
     root = Path(repo_path)
     repo_name = root.name
+    if saved_release_dir:
+        saved = Path(saved_release_dir)
+        if saved.is_dir():
+            hit = _pick_preferred_binary(
+                [*saved.glob("*.exe"), *saved.glob("*.apk"), *saved.glob("*.zip")],
+                repo_name,
+                fallback_stem="app-release",
+            )
+            if hit is not None:
+                return str(hit)
 
-    exe = _pick_preferred_binary(list((root / "dist").glob("*.exe")), repo_name)
-    if exe is not None:
-        return str(exe)
+    for rel_dir, pattern, fallback in _ARTIFACT_SPECS:
+        hit = _pick_preferred_binary(list((root / rel_dir).glob(pattern)), repo_name, fallback)
+        if hit is not None:
+            return str(hit)
+    return ""
 
-    apk = _pick_preferred_binary(
-        list((root / "build" / "app" / "outputs" / "flutter-apk").glob("*.apk")),
-        repo_name,
-        fallback_stem="app-release",
-    )
-    return str(apk) if apk is not None else ""
+
+def suggest_artifact_dir(
+    repo_path: str | Path,
+    current_file: str = "",
+    saved_release_dir: str = "",
+) -> str:
+    """Return the best starting directory for the Release file picker."""
+    if current_file.strip():
+        parent = Path(current_file.strip()).parent
+        if parent.is_dir():
+            return str(parent)
+    if saved_release_dir.strip() and Path(saved_release_dir.strip()).is_dir():
+        return str(Path(saved_release_dir.strip()))
+    root = Path(repo_path)
+    for rel_dir, _, _ in _ARTIFACT_SPECS:
+        candidate = root / rel_dir
+        if candidate.is_dir():
+            return str(candidate)
+    return str(root) if root.is_dir() else str(Path.home())
 
 
 def fetch_latest_public_version(app_slug: str) -> tuple[int, int, int] | None:

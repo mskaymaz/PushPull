@@ -227,10 +227,15 @@ class MainWindow(QMainWindow):
             repo_name=repo.name,
             repo_path=repo.path,
             saved_target=repo.release_target,
+            saved_release_dir=repo.release_dir,
             parent=self,
         )
         if dialog.exec() == ReleaseDialog.DialogCode.Accepted:
-            self._repos = self.store.set_release_target(repo.path, dialog.selected_target)
+            self._repos = self.store.set_release_target(
+                repo.path,
+                dialog.selected_target,
+                dialog.selected_release_dir,
+            )
             row = self.repo_list.get_row(repo.path)
             if row is not None:
                 row.set_release_target(dialog.selected_target)
